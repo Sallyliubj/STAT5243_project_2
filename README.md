@@ -31,3 +31,14 @@ Removes invalid columns, HTML, and corrupted text.
 Allows users to select specific variables for analysis.
 Provides intelligent missing value handling with four strategies.
 Enhances clarity by showing variable types before the dataset preview.
+
+
+Qiaoyang Lin's Work, Feature Engineering:
+
+For uploading data, set the button, you can select the specified columns to do feature engineering, such as One-Hot, Normalize and Box-Cox, 
+for the 'date' button you can change the format of the date data to generate the corresponding year, month and day, respectively; and generate the time to a specific date.
+
+You can also generate the average of two columns or interaction terms for two columns to generate meaningful features with the 'extra_operation' button.
+
+
+
