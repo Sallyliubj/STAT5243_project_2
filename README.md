@@ -1,37 +1,44 @@
 # STAT5243_project_2
-2025/3/8  Rain Shi's  work:
+Data Cleaning and Preprocessing - Rain Shi's Work (2025/3/11)
+Our Shiny for Python application provides an interactive data preprocessing tool that allows users to upload datasets, clean data, handle missing values, and apply advanced preprocessing techniques before analysis.
+
 1. UI Design
-File Upload: Supports .csv and .xlsx, allowing users to import local data files.
-Variable Selection: Users can check the variables they want to retain, avoiding unnecessary data processing.
-Missing Value Handling: Provides multiple strategies for handling missing values.
+File Upload: Supports .csv and .xlsx file imports.
+Built-in Datasets: Users can choose from preloaded datasets (iris, wine, breast_cancer, diabetes) for testing.
+Variable Selection: Users can select specific variables to retain, optimizing data processing.
+Missing Value Handling: Provides multiple strategies to handle missing data.
+Additional Cleaning Steps: Supports removing duplicates, standardizing data, normalizing data, and one-hot encoding.
 Data Display:
-Variable Types Table (Shows the data structure first).
-Data Table (Displays the first 10 rows of processed data).
+Variable Types Table: Shows data structure before displaying the actual dataset.
+Data Table: Displays the first 10 rows of the processed dataset.
 2. Data Cleaning
-Removing Invalid Columns: Deletes columns labeled Unnamed to eliminate empty or index-based columns.
+Removing Invalid Columns: Deletes unnecessary index-based columns (e.g., "Unnamed").
 Cleaning Text Data:
-Uses BeautifulSoup to remove HTML tags (helpful for web-scraped content).
-Keeps only ASCII characters, filtering out corrupted text.
-Filtering Corrupted Rows: Detects non-ASCII characters and removes rows with excessive encoding issues.
+Uses BeautifulSoup to remove HTML tags from text-based fields.
+Removes non-ASCII characters, filtering out corrupted text.
+Filtering Corrupted Rows: Detects excessive encoding issues and removes rows with non-ASCII characters.
 3. Variable Selection
-Users can choose specific variables to retain, optimizing processing efficiency.
+Users can choose specific variables to retain before processing.
 Ensures that only valid and selected columns remain in the dataset.
 4. Missing Value Handling
-Supports four methods:
+Provides four missing value handling strategies:
 
-Convert Common Missing Values to NA – Replaces "", -9, -99 with NaN.
-Listwise Deletion – Removes all rows containing missing values.
-Mean Imputation – Fills missing values in numeric columns using the mean.
-Mode Imputation – Replaces missing values using the most frequent value (mode).
-5. Data Display
-Variable Types Table: First, displays the data type of each column (int64, float64, object).
-Data Table: Next, presents the first 10 rows of the cleaned and processed dataset for preview.
-Summary
-Removes invalid columns, HTML, and corrupted text.
-Allows users to select specific variables for analysis.
-Provides intelligent missing value handling with four strategies.
-Enhances clarity by showing variable types before the dataset preview.
+Convert Common Missing Values to NA – Replaces placeholders like "", -9, -99 with NaN.
+Listwise Deletion – Drops rows containing any missing values.
+Mean Imputation – Fills missing values in numeric columns with the column mean.
+Mode Imputation – Replaces missing values with the most frequent value in the column.
+5. Additional Cleaning & Preprocessing Options
+Users can apply real-time feature engineering through these options:
 
+Remove Duplicates: Drops duplicate rows to eliminate redundancy.
+Standardize Data: Uses StandardScaler to scale numeric data using Z-score normalization.
+Normalize Data: Uses MinMaxScaler to scale values between 0 and 1.
+One-Hot Encoding:
+Encodes categorical variables into numerical format.
+Uses pd.get_dummies() with drop_first=True to prevent multicollinearity.
+6. Data Display
+Variable Types Table: Shows each column's data type (int64, float64, object).
+Data Table: Displays the first 10 rows of the cleaned and processed dataset.
 
 Qiaoyang Lin's Work, Feature Engineering:
 
