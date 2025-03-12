@@ -6,30 +6,60 @@ from bs4 import BeautifulSoup
 from sklearn.datasets import load_iris, load_wine, load_breast_cancer, load_diabetes
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
 import numpy as np
+import json
 
-# --- Function to Get Built-in Dataset ---
+
+try:
+    import pyreadr  # reading RDS files
+    HAS_PYREADR = True
+except ImportError:
+    HAS_PYREADR = False
+    print("Note: pyreadr not installed. RDS files will not be supported.")
+
+try:
+    import openpyxl  #  Excel files
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+    print("Note: openpyxl not installed. Modern Excel files will not be supported.")
+
+
 def get_builtin_dataset(name):
-    if name == "iris":
-        data = load_iris(as_frame=True)
-    elif name == "wine":
-        data = load_wine(as_frame=True)
-    elif name == "breast_cancer":
-        data = load_breast_cancer(as_frame=True)
-    elif name == "diabetes":
-        data = load_diabetes(as_frame=True)
-    else:
-        return None
+    """Load built-in dataset"""
+    try:
+        if name == "iris":
+            data = load_iris(as_frame=True)
+            df = pd.DataFrame(data.data, columns=data.feature_names)
+        elif name == "wine":
+            data = load_wine(as_frame=True)
+            df = pd.DataFrame(data.data, columns=data.feature_names)
+        elif name == "breast_cancer":
+            data = load_breast_cancer(as_frame=True)
+            df = pd.DataFrame(data.data, columns=data.feature_names)
+        elif name == "diabetes":
+            data = load_diabetes(as_frame=True)
+            df = pd.DataFrame(data.data, columns=data.feature_names)
+        else:
+            print(f"⚠️ Unknown dataset: {name}")
+            return None
 
-    df = data.data
-    df["target"] = data.target
-    return df
+        # Add target column
+        df["target"] = data.target
+        print(f"✓ Successfully loaded {name} dataset\n")
+        print(f"✓ Shape: {df.shape}")
+        return df
+
+    except Exception as e:
+        print(f"❌ Error loading {name} dataset: {str(e)}")
+        return None
 
 # --- UI Design ---
 app_ui = ui.page_fluid(
     ui.panel_title("Data Cleaning and Feature Selection Tool - Python Shiny"),
     ui.layout_sidebar(
         ui.sidebar(
-            ui.input_file("file1", "Select Data File", accept=[".csv", ".xlsx"]),
+            ui.input_file("file1", "Select Data File", 
+                         accept=[".csv", ".xlsx", ".xls", ".json", ".rds"]),
             ui.input_select("builtinDataset", "Choose Built-in Dataset",
                             choices=["None", "iris", "wine", "breast_cancer", "diabetes"], selected="None"),
             ui.input_checkbox_group("varSelect", "Select Variables to Keep:", choices=[]),
@@ -56,50 +86,108 @@ app_ui = ui.page_fluid(
 # --- Server Logic ---
 def server(input, output, session):
     data = reactive.Value(None)
-    processing_status = reactive.Value("")  # New reactive value for status updates
+    processing_status = reactive.Value("")
 
-    def clean_text(text):
-        """ Remove HTML content and keep only ASCII characters """
-        if pd.isna(text):
-            return text
-        text = BeautifulSoup(text, "html.parser").get_text()
-        text = re.sub(r'[^\x00-\x7F]+', '', text)
-        return text.strip()
+    def read_dataset(file_path, file_ext):
+        """Read dataset from various file formats"""
+        try:
+            if file_ext == "csv":
+                encodings = ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(file_path, encoding=encoding)
+                        print(f"✓ Successfully read CSV with {encoding} encoding")
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                    except Exception as e:
+                        raise Exception(f"Error reading CSV: {str(e)}")
+                
+            elif file_ext in ["xlsx", "xls"]:
+                if not HAS_OPENPYXL and file_ext == "xlsx":
+                    raise Exception("openpyxl not installed. Please install it to read modern Excel files.")
+                try:
+                    df = pd.read_excel(file_path, engine='openpyxl' if file_ext == 'xlsx' else 'xlrd')
+                    print(f"✓ Successfully read {file_ext.upper()} file")
+                except Exception as e:
+                    raise Exception(f"Error reading Excel file: {str(e)}")
+                
+            elif file_ext == "json":
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        df = pd.DataFrame(data)
+                    else:
+                        df = pd.DataFrame([data])
+                    print("✓ Successfully read JSON file")
+                except:
+                    df = pd.read_json(file_path, lines=True)
+                    print("✓ Successfully read JSON Lines file")
+                
+            elif file_ext == "rds":
+                if not HAS_PYREADR:
+                    raise Exception("pyreadr not installed. Please install it to read RDS files.")
+                result = pyreadr.read_r(file_path)
+                df = result[None] if None in result else result[list(result.keys())[0]]
+                print("✓ Successfully read RDS file")
+                
+            else:
+                raise Exception(f"Unsupported file format: {file_ext}")
+
+            if df.empty:
+                raise Exception("Loaded data is empty")
+                
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+            
+            df.columns = df.columns.astype(str)
+            
+            print(f"✓ Loaded data shape: {df.shape}")
+            return df
+
+        except Exception as e:
+            print(f"❌ Error reading file: {str(e)}")
+            raise e
 
     @reactive.effect
     def update_data():
-        """ Read the file or load built-in dataset """
-        if input.builtinDataset() != "None":
-            df = get_builtin_dataset(input.builtinDataset())
-        else:
-            file_info = input.file1()
-            if not file_info:
-                print("⚠️ No file selected")
-                return
+        """Read the file or load built-in dataset"""
+        file_info = input.file1()
+        builtin_selected = input.builtinDataset()
+        
+        if builtin_selected != "None":
+            
+            df = get_builtin_dataset(builtin_selected)
+            if df is not None:
+                ui.update_checkbox_group("varSelect", 
+                                      choices=df.columns.tolist(), 
+                                      selected=df.columns.tolist())
+                data.set(df)
+                processing_status.set(f"✓ Successfully loaded {builtin_selected} dataset\n")
+            return
+            
 
+        if file_info:
+            ui.update_select("builtinDataset", selected="None")
+            
             file_path = file_info[0]["datapath"]
-            file_ext = file_info[0]["name"].split(".")[-1]
+            file_ext = file_info[0]["name"].split(".")[-1].lower()
 
             try:
-                if file_ext == "csv":
-                    df = pd.read_csv(file_path)
-                elif file_ext in ["xls", "xlsx"]:
-                    df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-                else:
-                    print("❌ Unsupported file format:", file_ext)
-                    return
-
-                if df.empty:
-                    print("❌ Loaded data is empty")
-                    return
-
-                df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-
+                df = read_dataset(file_path, file_ext)
+                
+         
+                ui.update_checkbox_group("varSelect", 
+                                      choices=df.columns.tolist(), 
+                                      selected=df.columns.tolist())
+                
+                data.set(df)
+                
+                processing_status.set(f"✓ Successfully loaded {file_ext.upper()} file\n")
+                
             except Exception as e:
-                print(f"❌ Error reading file: {e}")
-
-        ui.update_checkbox_group("varSelect", choices=df.columns.tolist(), selected=df.columns.tolist())
-        data.set(df)
+                processing_status.set(f"❌ Error: {str(e)}")
+                return
 
     @reactive.effect
     @reactive.event(input.processData)
@@ -110,9 +198,8 @@ def server(input, output, session):
             processing_status.set("❌ Data not loaded properly")
             return
 
-        status_messages = []  # Collect all status messages
+        status_messages = [] 
         
-        # Keep selected variables
         selected_vars = input.varSelect()
         valid_vars = [col for col in selected_vars if col in df.columns]
         if not valid_vars:
@@ -121,7 +208,6 @@ def server(input, output, session):
             df = df.loc[:, valid_vars].copy()
             status_messages.append(f"✓ Selected {len(valid_vars)} variables")
 
-        # Handle missing values
         missing_option = input.missingDataOption()
         if missing_option == "Convert Common Missing Values to NA":
             missing_values = ["", "-9", "-99", "NA", "N/A", "nan", "NaN", "null", "NULL", "None"]
@@ -196,7 +282,7 @@ def server(input, output, session):
                 new_cols = df.shape[1] - original_cols
                 status_messages.append(f"✓ One-hot encoding added {new_cols} new columns")
 
-        # Update status and data
+
         status_messages.append(f"\n✅ Processing complete! New shape: {df.shape}\n")
         processing_status.set("\n".join(status_messages))
         data.set(df)
@@ -231,11 +317,9 @@ AVAILABLE COLUMNS
 {'=' * 40}
 
 """
-        # Add columns list with proper formatting
         columns = df.columns.tolist()
         column_list = '\n'.join(f"{i:3d}. {col}" for i, col in enumerate(columns, 1))
         
-        # Add processing status if available
         if status:
             summary += f"\n{'=' * 40}\nPROCESSING STATUS\n{'=' * 40}\n\n{status}"
             
@@ -297,7 +381,6 @@ AVAILABLE COLUMNS
         if df is None or df.empty:
             return pd.DataFrame()
         
-        # Limit the display width of string columns
         preview_df = df.head(10).copy()
         for col in preview_df.select_dtypes(include=['object']).columns:
             preview_df[col] = preview_df[col].apply(
