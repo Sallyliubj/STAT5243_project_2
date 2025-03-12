@@ -8,21 +8,9 @@ import re
 from sklearn.datasets import load_iris, load_wine, load_breast_cancer, load_diabetes
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import json
+import pyreadr
+import openpyxl
 
-# Optional imports
-try:
-    import pyreadr  
-    HAS_PYREADR = True
-except ImportError:
-    HAS_PYREADR = False
-    print("Note: pyreadr not installed. RDS files will not be supported.")
-
-try:
-    import openpyxl  
-    HAS_OPENPYXL = True
-except ImportError:
-    HAS_OPENPYXL = False
-    print("Note: openpyxl not installed. Modern Excel files will not be supported.")
 
 # Built-in dataset loader
 def get_builtin_dataset(name):
@@ -84,7 +72,13 @@ app_ui = ui.page_navbar(
                 ui.input_checkbox_group("dataProcessingOptions", "Additional Cleaning Steps:",
                                       choices=["Remove Duplicates", "Standardize Data", 
                                              "Normalize Data", "One-Hot Encoding"]),
-                ui.input_action_button("processData", "Clean Data", class_="btn-primary"),
+                ui.div(
+                    ui.input_action_button("processData", "Clean Data", 
+                                         class_="btn-primary"),
+                    ui.input_action_button("revertCleaningChange", "Revert Last Change",
+                                         class_="btn-warning",
+                                         style="margin-left: 10px;"),
+                ),
             ),
             ui.card(
                 ui.h4("Data Summary"),
@@ -105,25 +99,67 @@ app_ui = ui.page_navbar(
                 ui.h4("Feature Engineering Operations"),
                 ui.input_select("featureColumn", "Select Column for Feature Engineering", choices=[]),
                 ui.input_select("featureOperation", "Select Operation", choices=[
-                    "Normalize", "One-Hot", "Date", "Box-Cox"
+                    "Normalize", "One-Hot", "Convert Date Format", "Box-Cox"
                 ]),
                 ui.panel_conditional(
-                    "input.featureOperation === 'Date'",
+                    "input.featureOperation === 'Convert Date Format'",
                     ui.p("Specify a reference date to calculate the number of days between your date column and this reference date.", 
                          style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Please make sure the selected column is a date column.", 
+                        style="color: red; font-style: italic; margin: 10px 0;"),
                     ui.input_numeric("input_year", "Input year (YYYY)", value=2025),
                     ui.input_numeric("input_month", "Input month (MM)", value=3),
                     ui.input_numeric("input_day", "Input day (DD)", value=7),
                 ),
+                ui.panel_conditional(
+                    "input.featureOperation === 'Normalize'",
+                    ui.p("Scales the selected column to range [0,1]. Useful for features with different scales.", 
+                         style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Note: Only works with numerical columns.", 
+                         style="color: red; font-style: italic;"),
+                ),
+                ui.panel_conditional(
+                    "input.featureOperation === 'One-Hot'",
+                    ui.p("Creates binary columns for each unique value in the selected categorical column.", 
+                         style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Best used for categorical columns with limited unique values.", 
+                         style="color: red; font-style: italic;"),
+                ),
+                ui.panel_conditional(
+                    "input.featureOperation === 'Box-Cox'",
+                    ui.p("Transforms data to be more normally distributed. Useful for skewed numerical data.", 
+                         style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Note: Only works with positive numerical values. Negative values will be shifted.", 
+                         style="color: red; font-style: italic;"),
+                ),
                 ui.hr(),
-                ui.h4("Add New Features from Multiple Columns"),
+                ui.h4("Add a New Feature from Multiple Columns"),
                 ui.input_selectize("multiColumns", "Select Columns for New Feature", 
                                  choices=[], multiple=True),
                 ui.input_select("extraOperation", "Create New Feature", choices=[
                     "None", "Average", "Interactions"
                 ]),
-                ui.input_action_button("applyFeatureEng", "Apply Feature Engineering", 
-                                     class_="btn-primary"),
+                ui.panel_conditional(
+                    "input.extraOperation === 'Average'",
+                    ui.p("Creates a new column with the average value of selected columns. Useful for combining related features.", 
+                         style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Note: Select at least 2 numerical columns. Non-numerical columns will be ignored.", 
+                         style="color: red; font-style: italic;"),
+                ),
+                ui.panel_conditional(
+                    "input.extraOperation === 'Interactions'",
+                    ui.p("Creates a new column by multiplying two selected columns. Useful for capturing feature relationships.", 
+                         style="color: #666; font-style: italic; margin: 10px 0;"),
+                    ui.p("Note: Select exactly 2 numerical columns. Only the first two selected columns will be used.", 
+                         style="color: red; font-style: italic;"),
+                ),
+                ui.div(
+                    ui.input_action_button("applyFeatureEng", "Apply Feature Engineering", 
+                                         class_="btn-primary"),
+                    ui.input_action_button("revertChange", "Revert Last Change",
+                                         class_="btn-warning",
+                                         style="margin-left: 10px;"),
+                ),
                 ui.hr(),
                 ui.download_button("downloadData", "Download Processed Data")
             ),
@@ -142,10 +178,12 @@ app_ui = ui.page_navbar(
 )
 
 def server(input, output, session):
-    # Reactive values
     data = reactive.Value(None)
+    original_data = reactive.Value(None)
     processing_status = reactive.Value("")
     feature_status = reactive.Value("")
+    previous_data = reactive.Value(None)
+    cleaning_history = reactive.Value(None)
     
     def clean_text(text):
         """ Remove HTML content and keep only ASCII characters """
@@ -171,8 +209,6 @@ def server(input, output, session):
                         raise Exception(f"Error reading CSV: {str(e)}")
                 
             elif file_ext in ["xlsx", "xls"]:
-                if not HAS_OPENPYXL and file_ext == "xlsx":
-                    raise Exception("openpyxl not installed. Please install it to read modern Excel files.")
                 try:
                     df = pd.read_excel(file_path, engine='openpyxl' if file_ext == 'xlsx' else 'xlrd')
                     print(f"✓ Successfully read {file_ext.upper()} file")
@@ -193,8 +229,6 @@ def server(input, output, session):
                     print("✓ Successfully read JSON Lines file")
                 
             elif file_ext == "rds":
-                if not HAS_PYREADR:
-                    raise Exception("pyreadr not installed. Please install it to read RDS files.")
                 result = pyreadr.read_r(file_path)
                 df = result[None] if None in result else result[list(result.keys())[0]]
                 print("✓ Successfully read RDS file")
@@ -214,6 +248,22 @@ def server(input, output, session):
             print(f"❌ Error reading file: {str(e)}")
             raise e
 
+    def update_ui_with_data(df, is_original=False):
+        """Update UI elements when new data is loaded"""
+        if is_original:
+            # Update variable selection with all original columns
+            ui.update_checkbox_group("varSelect", 
+                                   choices=df.columns.tolist(),
+                                   selected=df.columns.tolist())
+            original_data.set(df)
+        
+        # Update feature engineering dropdowns
+        ui.update_select("featureColumn", choices=[""] + df.columns.tolist())
+        ui.update_selectize("multiColumns", choices=df.columns.tolist())
+        data.set(df)
+
+   
+
     @reactive.effect
     def update_data():
         """Read the file or load built-in dataset"""
@@ -223,7 +273,7 @@ def server(input, output, session):
         if builtin_selected != "None":
             df = get_builtin_dataset(builtin_selected)
             if df is not None:
-                update_ui_with_data(df)
+                update_ui_with_data(df, is_original=True)
                 processing_status.set(f"✓ Successfully loaded {builtin_selected} dataset\n")
             return
 
@@ -233,18 +283,10 @@ def server(input, output, session):
                 file_path = file_info[0]["datapath"]
                 file_ext = file_info[0]["name"].split(".")[-1].lower()
                 df = read_dataset(file_path, file_ext)
-                update_ui_with_data(df)
+                update_ui_with_data(df, is_original=True)
                 processing_status.set(f"✓ Successfully loaded {file_ext.upper()} file\n")
             except Exception as e:
                 processing_status.set(f"❌ Error: {str(e)}")
-
-    def update_ui_with_data(df):
-        """Update UI elements when new data is loaded"""
-        ui.update_checkbox_group("varSelect", choices=df.columns.tolist(), 
-                               selected=df.columns.tolist())
-        ui.update_select("featureColumn", choices=df.columns.tolist())
-        ui.update_selectize("multiColumns", choices=df.columns.tolist())
-        data.set(df)
 
     @reactive.effect
     @reactive.event(input.applyFeatureEng)
@@ -256,10 +298,10 @@ def server(input, output, session):
             return
 
         try:
+            previous_data.set(df.copy())
             df = df.copy()
             status_messages = []
             
-            # Single column operations
             column = input.featureColumn()
             operation = input.featureOperation()
             
@@ -272,7 +314,7 @@ def server(input, output, session):
                     df = pd.get_dummies(df, columns=[column])
                     status_messages.append(f"✓ One-hot encoded column: {column}")
                     
-                elif operation == "Date":
+                elif operation == "Convert Date Format":
                     df[column] = pd.to_datetime(df[column], errors="coerce")
                     df[f"{column}_year"] = df[column].dt.year
                     df[f"{column}_month"] = df[column].dt.month
@@ -318,7 +360,7 @@ def server(input, output, session):
             feature_status.set("\n".join(status_messages))
             
         except Exception as e:
-            feature_status.set(f"❌ Error in feature engineering: {str(e)}")
+            feature_status.set(f"❌ Error in feature engineering: {str(e)} is not a selected column")
 
     @output
     @render.download
@@ -352,6 +394,8 @@ def server(input, output, session):
     def process_data():
         """Process data: keep selected variables and handle missing values dynamically"""
         df = data.get()
+        orig_df = original_data.get()
+        
         if df is None:
             processing_status.set("❌ No data loaded")
             return
@@ -362,10 +406,13 @@ def server(input, output, session):
             processing_status.set("⚠️ Error: Please select at least one variable to proceed\n")
             return
 
-        df = df.copy()  # Create a copy to avoid modifying original data
+        # Store current state before modification
+        cleaning_history.set(df.copy())
+        
+        # Start with original data and select variables
+        df = orig_df.copy()
         status_messages = []
 
-        # Keep selected variables
         valid_vars = [col for col in selected_vars if col in df.columns]
         if not valid_vars:
             status_messages.append("⚠️ No valid columns selected")
@@ -374,7 +421,6 @@ def server(input, output, session):
             df = df.loc[:, valid_vars].copy()
             status_messages.append(f"✓ Selected {len(valid_vars)} variables")
 
-        # Handle missing values
         missing_option = input.missingDataOption()
         if missing_option == "Convert Common Missing Values to NA":
             missing_values = ["", "-9", "-99", "NA", "N/A", "nan", "NaN", "null", "NULL", "None"]
@@ -418,7 +464,6 @@ def server(input, output, session):
             if imputed_count > 0:
                 status_messages.append(f"✓ Imputed {imputed_count} missing values with mode values")
 
-        # Additional Data Processing Steps
         selected_processing_options = input.dataProcessingOptions()
         if "Remove Duplicates" in selected_processing_options:
             original_rows = len(df)
@@ -478,9 +523,6 @@ Numerical Columns:  {len(df.select_dtypes(include=['int64', 'float64']).columns)
 Categorical Columns: {len(df.select_dtypes(include=['object', 'category']).columns)}
 DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
 
-{'=' * 40}
-AVAILABLE COLUMNS
-{'=' * 40}
 
 """
         columns = df.columns.tolist()
@@ -566,8 +608,38 @@ AVAILABLE COLUMNS
     @reactive.event(input.selectAll)
     def select_all_variables():
         """Select all variables in the checkbox group"""
-        df = data.get()
+        df = original_data.get()
         if df is not None:
             ui.update_checkbox_group("varSelect", selected=df.columns.tolist())
+
+    # Add new reactive effect for reverting changes
+    @reactive.effect
+    @reactive.event(input.revertChange)
+    def revert_last_change():
+        """Revert to the previous state before last feature engineering operation"""
+        prev_df = previous_data.get()
+        if prev_df is None:
+            feature_status.set("⚠️ No previous state available to revert to")
+            return
+        
+        # Restore previous state
+        data.set(prev_df)
+        update_ui_with_data(prev_df)
+        feature_status.set("✓ Reverted to previous state")
+
+    @reactive.effect
+    @reactive.event(input.revertCleaningChange)
+    def revert_cleaning_change():
+        """Revert to the previous state before last cleaning operation"""
+        prev_df = cleaning_history.get()
+        if prev_df is None:
+            processing_status.set("⚠️ No previous state available to revert to\n")
+            return
+        
+        data.set(prev_df)
+        # Don't update the variable selection list when reverting
+        ui.update_select("featureColumn", choices=[""] + prev_df.columns.tolist())
+        ui.update_selectize("multiColumns", choices=prev_df.columns.tolist())
+        processing_status.set("✓ Reverted to previous state\n")
 
 app = App(app_ui, server) 
