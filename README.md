@@ -50,19 +50,17 @@ You can also generate the average of two columns or interaction terms for two co
 Nan Xiao's Work: Exploration Data Analysis (EDA)
 1. Fully Interactive Data Exploration
 File Upload & Dataset Selection: Users can upload CSV files
-Data Summary Display: Shows row/column counts, data types, and basic information
 Dynamic Table View: Interactive data table with pagination
 2. Filtering
-Column-based Filtering: Automatically generates appropriate filters for each column
+Column-based Filtering: Users can apply numeric range filters or categorical selections to focus on specific subsets of the data
 Sliders for Numeric Variables: Range sliders for numeric data
 Checkboxes for Categorical Variables: Multi-select for categorical data
 3. Custom Visualization Settings
-Multiple Graph Types: Histogram, scatter plot, bar chart, box plot, violin plot, and correlation heatmap
-Dynamic Axis Selection: Users can select which variables to plot
+Multiple Graph Types: Histogram, scatter plot, bar chart, correlation heatmap
+Dynamic Axis Selection: Users can select which variables to be the x-axis and y-axis of the plot, the bin size of histogram, whether display a regression line
 Grouping & Color Options: Color-coding data points by categorical variables
 4. Dynamic Statistical Insights
-Summary Statistics: Shows descriptive statistics for all numerical columns
+Summary Statistics: Shows descriptive statistics for all numerical columns, including metrics like mean, median, skewness, correlation, and regression analysis.
 Correlation Analysis: Correlation heatmap with detailed analysis
-Regression Lines: Option to add regression lines to scatter plots
 
 
