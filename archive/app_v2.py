@@ -16,10 +16,22 @@ import json
 import io
 import base64
 import warnings
-import pyreadr  
-import openpyxl  
 warnings.filterwarnings('ignore')
 
+# Optional imports
+try:
+    import pyreadr  
+    HAS_PYREADR = True
+except ImportError:
+    HAS_PYREADR = False
+    print("Note: pyreadr not installed. RDS files will not be supported.")
+
+try:
+    import openpyxl  
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+    print("Note: openpyxl not installed. Excel files will not be supported.")
 
 # Define CSS for the modern UI
 app_css = """
@@ -167,14 +179,7 @@ app_ui = ui.page_fluid(
                                                   "Normalize Data", "One-Hot Encoding"]),
                         class_="checkbox-group"
                     ),
-                    ui.tags.div(
-                        ui.input_action_button("processData", "Clean Data", 
-                                             class_="btn-primary"),
-                        ui.input_action_button("revertCleaningChange", "Revert Last Change",
-                                             class_="btn-warning",
-                                             style="margin-left: 10px;"),
-                        style="margin-bottom: 15px;"
-                    ),
+                    ui.input_action_button("processData", "Clean Data"),
                     class_="sidebar"
                 )
             ),
@@ -233,35 +238,12 @@ app_ui = ui.page_fluid(
                         ui.input_select("featureOperation", "Select Operation", 
                                      choices=["Normalize", "One-Hot", "Convert Date Format", "Box-Cox"]),
                         ui.panel_conditional(
-                            "input.featureOperation === 'Normalize'",
-                            ui.p("Scales the selected column to range [0,1]. Useful for features with different scales.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Note: Only works with numerical columns.", 
-                                 style="color: red; font-style: italic;"),
-                        ),
-                        ui.panel_conditional(
-                            "input.featureOperation === 'One-Hot'",
-                            ui.p("Creates binary columns for each unique value in the selected categorical column.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Best used for categorical columns with limited unique values.", 
-                                 style="color: red; font-style: italic;"),
-                        ),
-                        ui.panel_conditional(
                             "input.featureOperation === 'Convert Date Format'",
-                            ui.p("Specify a reference date to calculate the number of days between your date column and this reference date.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Please make sure the selected column is a date column.", 
-                                style="color: red; font-style: italic; margin: 10px 0;"),
+                            ui.tags.p("Specify a reference date to calculate the number of days between your date column and this reference date.", 
+                                   style="color: #666; font-style: italic; margin: 10px 0;"),
                             ui.input_numeric("input_year", "Input year (YYYY)", value=2025),
                             ui.input_numeric("input_month", "Input month (MM)", value=3),
                             ui.input_numeric("input_day", "Input day (DD)", value=7),
-                        ),
-                        ui.panel_conditional(
-                            "input.featureOperation === 'Box-Cox'",
-                            ui.p("Transforms data to be more normally distributed. Useful for skewed numerical data.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Note: Only works with positive numerical values. Negative values will be shifted.", 
-                                 style="color: red; font-style: italic;"),
                         ),
                         style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-bottom: 20px;"
                     ),
@@ -272,33 +254,11 @@ app_ui = ui.page_fluid(
                                         choices=[], multiple=True),
                         ui.input_select("extraOperation", "Create New Feature", 
                                      choices=["None", "Average", "Interactions"]),
-                        ui.panel_conditional(
-                            "input.extraOperation === 'Average'",
-                            ui.p("Creates a new column with the average value of selected columns. Useful for combining related features.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Note: Select at least 2 numerical columns. Non-numerical columns will be ignored.", 
-                                 style="color: red; font-style: italic;"),
-                        ),
-                        ui.panel_conditional(
-                            "input.extraOperation === 'Interactions'",
-                            ui.p("Creates a new column by multiplying two selected columns. Useful for capturing feature relationships.", 
-                                 style="color: #666; font-style: italic; margin: 10px 0;"),
-                            ui.p("Note: Select exactly 2 numerical columns. Only the first two selected columns will be used.", 
-                                 style="color: red; font-style: italic;"),
-                        ),
                         style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-bottom: 20px;"
                     ),
-                    ui.input_action_button("applyFeatureEng", "Apply Feature Engineering",
-                                         class_="btn-primary"),
-                    ui.input_action_button("revertChange", "Revert Last Change",
-                                         class_="btn-warning",
-                                         style="margin-left: 10px;"),
+                    ui.input_action_button("applyFeatureEng", "Apply Feature Engineering"),
                     ui.tags.hr(),
-                    ui.download_button(
-                        id="downloadData",
-                        label="Download Processed Data",
-                        class_="btn-primary"
-                    ),
+                    ui.download_button("downloadData", "Download Processed Data"),
                     class_="sidebar"
                 )
             ),
@@ -513,8 +473,6 @@ def server(input, output, session):
     data = reactive.Value(None)
     processing_status = reactive.Value("")
     feature_status = reactive.Value("")
-    previous_data = reactive.Value(None)
-    cleaning_history = reactive.Value(None)
     
     def clean_text(text):
         """ Remove HTML content and keep only ASCII characters """
@@ -540,6 +498,8 @@ def server(input, output, session):
                         raise Exception(f"Error reading CSV: {str(e)}")
                 
             elif file_ext in ["xlsx", "xls"]:
+                if not HAS_OPENPYXL and file_ext == "xlsx":
+                    raise Exception("openpyxl not installed. Please install it to read Excel files.")
                 try:
                     df = pd.read_excel(file_path, engine='openpyxl' if file_ext == 'xlsx' else 'xlrd')
                     print(f"✓ Successfully read {file_ext.upper()} file")
@@ -560,6 +520,8 @@ def server(input, output, session):
                     print("✓ Successfully read JSON Lines file")
                 
             elif file_ext == "rds":
+                if not HAS_PYREADR:
+                    raise Exception("pyreadr not installed. Please install it to read RDS files.")
                 result = pyreadr.read_r(file_path)
                 df = result[None] if None in result else result[list(result.keys())[0]]
                 print("✓ Successfully read RDS file")
@@ -627,9 +589,6 @@ def server(input, output, session):
             return
 
         try:
-            # Store current state before modification
-            previous_data.set(df.copy())
-            
             df = df.copy()
             status_messages = []
             
@@ -691,38 +650,21 @@ def server(input, output, session):
             feature_status.set("\n".join(status_messages))
             
         except Exception as e:
-            feature_status.set(f"❌ Error in feature engineering: {str(e)} is not a selected column")
-
-    @reactive.effect
-    @reactive.event(input.revertChange)
-    def revert_last_change():
-        """Revert to the previous state before last feature engineering operation"""
-        prev_df = previous_data.get()
-        if prev_df is None:
-            feature_status.set("⚠️ No previous state available to revert to")
-            return
-        
-        # Restore previous state
-        data.set(prev_df)
-        update_ui_with_data(prev_df)
-        feature_status.set("✓ Reverted to previous state")
+            feature_status.set(f"❌ Error in feature engineering: {str(e)}")
 
     @output
-    @render.download(
-        filename=lambda: f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    )
+    @render.download
     def downloadData():
-        df = data.get()
-        if df is not None:
-            try:
-                csv_bytes = df.to_csv(index=False).encode('utf-8')
-                return {"content-type": "text/csv", "content": csv_bytes}
-            except Exception as e:
-                print(f"Download error: {str(e)}")
-                return {"content-type": "text/plain", "content": b"Error occurred while downloading data"}
-        return {"content-type": "text/plain", "content": b"No data available"}
+        """Download the processed dataset"""
+        def download():
+            df = data.get()
+            if df is not None:
+                return df.to_csv(index=False)
+            return ""
+        
+        return download
 
-
+    # Add separate outputs for feature engineering page
     @output
     @render.text
     def featureStatus():
@@ -745,9 +687,6 @@ def server(input, output, session):
             processing_status.set("❌ No data loaded")
             return
 
-        # Store current state before modification
-        cleaning_history.set(df.copy())
-        
         selected_vars = input.varSelect()
         if not selected_vars:
             processing_status.set("⚠️ Error: Please select at least one variable to proceed\n")
@@ -809,6 +748,7 @@ def server(input, output, session):
             if imputed_count > 0:
                 status_messages.append(f"✓ Imputed {imputed_count} missing values with mode values")
 
+        # Additional Data Processing Steps
         selected_processing_options = input.dataProcessingOptions()
         if "Remove Duplicates" in selected_processing_options:
             original_rows = len(df)
@@ -867,6 +807,10 @@ COLUMN TYPES
 Numerical Columns:  {len(df.select_dtypes(include=['int64', 'float64']).columns)}
 Categorical Columns: {len(df.select_dtypes(include=['object', 'category']).columns)}
 DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
+
+{'=' * 40}
+AVAILABLE COLUMNS
+{'=' * 40}
 
 """
         columns = df.columns.tolist()
@@ -940,6 +884,7 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
             )
         return preview_df
         
+    # Visualization tab outputs
     @output
     @render.ui
     def main_plot():
@@ -1060,7 +1005,7 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
         if df is not None:
             ui.update_checkbox_group("varSelect", selected=df.columns.tolist())
             
-
+    # EDA tab functions
     @output
     @render.ui
     def eda_filter_ui():
@@ -1073,6 +1018,7 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
         for col in df.columns:
             try:
                 if pd.api.types.is_numeric_dtype(df[col]):
+                    # Handle potential NaN, inf values, and math domain errors
                     col_data = df[col].replace([np.inf, -np.inf], np.nan).dropna()
                     
                     if len(col_data) == 0:
@@ -1081,9 +1027,11 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
                     min_val = float(col_data.min())
                     max_val = float(col_data.max())
                     
+                    # Check if min and max are the same or if they're invalid
                     if not np.isfinite(min_val) or not np.isfinite(max_val) or min_val == max_val:
                         continue
                     
+                    # Check if the range is too large for a slider (prevent UI issues)
                     if max_val - min_val > 1e10:
                         continue
                         
@@ -1098,7 +1046,8 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
                         choices = {str(val): str(val) for val in unique_vals}
                         filter_inputs.append(
                             ui.input_checkbox_group(f"eda_filter_{col}", f"Filter {col}:", 
-                                                  choices=choices))
+                                                  choices=choices)
+                        )
             except Exception as e:
                 print(f"Error creating filter for column {col}: {str(e)}")
                 continue
@@ -1112,12 +1061,14 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
             return None
         
         try:
+            # Apply filters if they exist
             for col in df.columns:
                 if hasattr(input, f"eda_filter_{col}"):
                     try:
                         if pd.api.types.is_numeric_dtype(df[col]):
                             range_val = getattr(input, f"eda_filter_{col}")()
                             if range_val and len(range_val) == 2:
+                                # Handle potential NaN values safely
                                 mask = df[col].notna() & (df[col] >= range_val[0]) & (df[col] <= range_val[1])
                                 df = df[mask]
                         elif pd.api.types.is_categorical_dtype(df[col]) or pd.api.types.is_object_dtype(df[col]):
@@ -1440,18 +1391,5 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
         plt.title('Correlation Matrix (Upper Triangle Hidden)')
         plt.tight_layout()
         return fig
-
-    @reactive.effect
-    @reactive.event(input.revertCleaningChange)
-    def revert_cleaning_change():
-        """Revert to the previous state before last cleaning operation"""
-        prev_df = cleaning_history.get()
-        if prev_df is None:
-            processing_status.set("⚠️ No previous state available to revert to\n")
-            return
-        
-        data.set(prev_df)
-        update_ui_with_data(prev_df)
-        processing_status.set("✓ Reverted to previous state\n")
 
 app = App(app_ui, server)

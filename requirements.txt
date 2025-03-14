@@ -1,0 +1,16 @@
+pandas
+numpy
+scipy
+plotly
+seaborn
+statsmodels
+scikit-learn
+openpyxl
+pyreadr
+xlrd
+seaborn
+matplotlib
+shiny
+scipy
+Jinja2
+bs4
