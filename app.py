@@ -126,7 +126,7 @@ app_ui = ui.page_fluid(
         ui.input_radio_buttons(
             "active_tab", 
             "Select Tab:", 
-            {"data_cleaning": "Data Cleaning", "feature_engineering": "Feature Engineering", "visualization": "Visualization", "eda": "EDA"},
+            {"data_cleaning": "Data Cleaning", "feature_engineering": "Feature Engineering", "visualization": "EDA"},
             selected="data_cleaning",
             inline=True
         ),
@@ -336,13 +336,12 @@ app_ui = ui.page_fluid(
             ui.column(4,
                 ui.tags.div(
                     ui.tags.h3("Visualization Controls", class_="section-title"),
-                    ui.input_date_range(
-                        "date_range", 
-                        "Select Date Range",
-                        start=datetime(2020, 1, 1),
-                        end=datetime.now(),
-                        format="yyyy-mm-dd"
-                    ),
+                    
+                    # Add Data Filters Section
+                    ui.tags.h4("Data Filters", style="margin-top: 20px;"),
+                    ui.output_ui("viz_filter_ui"),
+                    ui.tags.hr(),
+                    
                     ui.input_select(
                         "plot_type", 
                         "Plot Type",
@@ -350,26 +349,33 @@ app_ui = ui.page_fluid(
                             "line": "Line Chart", 
                             "bar": "Bar Chart",
                             "scatter": "Scatter Plot",
-                            "histogram": "Histogram"
+                            "histogram": "Histogram",
+                            "heatmap": "Correlation Heatmap"  # Add heatmap option
                         },
                         selected="line"
                     ),
-                    ui.tags.div(
-                        ui.input_select(
-                            "x_var", 
-                            "X-axis Variable",
-                            choices=[]
+                    
+                    # Show x/y selections only for non-heatmap plots
+                    ui.panel_conditional(
+                        "input.plot_type !== 'heatmap'",
+                        ui.tags.div(
+                            ui.input_select(
+                                "x_var", 
+                                "X-axis Variable",
+                                choices=[]
+                            ),
+                            style="margin-bottom: 15px;"
                         ),
-                        style="margin-bottom: 15px;"
-                    ),
-                    ui.tags.div(
-                        ui.input_select(
-                            "y_var", 
-                            "Y-axis Variable",
-                            choices=[]
+                        ui.tags.div(
+                            ui.input_select(
+                                "y_var", 
+                                "Y-axis Variable",
+                                choices=[]
+                            ),
+                            style="margin-bottom: 15px;"
                         ),
-                        style="margin-bottom: 15px;"
                     ),
+                    
                     ui.input_action_button("update_plot", "Update Plot"),
                     ui.tags.hr(),
                     ui.tags.h3("Summary Statistics", class_="section-title"),
@@ -408,100 +414,6 @@ app_ui = ui.page_fluid(
                         ),
                         class_="card"
                     ),
-                    class_="main-panel"
-                )
-            )
-        )
-    ),
-    
-    # EDA UI
-    ui.panel_conditional(
-        "input.active_tab === 'eda'",
-        ui.row(
-            ui.column(12,
-                ui.tags.div(
-                    ui.tags.h3("Exploratory Data Analysis", class_="section-title"),
-                    
-                    # Visualization Settings
-                    ui.tags.div(
-                        ui.tags.h4("Visualization Settings", style="margin-top: 20px;"),
-                        ui.input_select("eda_plot_type", "Select Plot Type:", {
-                            "histogram": "Histogram",
-                            "scatter": "Scatter Plot",
-                            "bar": "Bar Chart",
-                            "heatmap": "Correlation Heatmap"
-                        }),
-                        ui.output_ui("eda_plot_controls"),
-                        style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-bottom: 20px;"
-                    ),
-                    
-                    # Data Filters
-                    ui.tags.div(
-                        ui.tags.h4("Data Filters", style="margin-top: 20px;"),
-                        ui.output_ui("eda_filter_ui"),
-                        style="background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin-bottom: 20px;"
-                    ),
-                    
-                    # Data Preview and Visualization
-                    ui.row(
-                        ui.column(6,
-                            ui.tags.div(
-                                ui.tags.div(class_="card-header", children="Data Preview"),
-                                ui.tags.div(
-                                    ui.output_table("eda_data_preview"),
-                                    class_="card-body"
-                                ),
-                                class_="card"
-                            )
-                        ),
-                        ui.column(6,
-                            ui.tags.div(
-                                ui.tags.div(class_="card-header", children="Numerical Summary"),
-                                ui.tags.div(
-                                    ui.output_table("eda_numerical_summary"),
-                                    class_="card-body"
-                                ),
-                                class_="card"
-                            )
-                        )
-                    ),
-                    
-                    # Plot and Description
-                    ui.row(
-                        ui.column(8,
-                            ui.tags.div(
-                                ui.tags.div(class_="card-header", children="Visualization"),
-                                ui.tags.div(
-                                    ui.output_plot("eda_plot"),
-                                    class_="card-body",
-                                    style="min-height: 400px;"
-                                ),
-                                class_="card"
-                            )
-                        ),
-                        ui.column(4,
-                            ui.tags.div(
-                                ui.tags.div(class_="card-header", children="Plot Description"),
-                                ui.tags.div(
-                                    ui.output_ui("eda_plot_description"),
-                                    class_="card-body"
-                                ),
-                                class_="card"
-                            )
-                        )
-                    ),
-                    
-                    # Correlation Analysis
-                    ui.tags.div(
-                        ui.tags.div(class_="card-header", children="Correlation Analysis"),
-                        ui.tags.div(
-                            ui.output_plot("eda_correlation_plot"),
-                            class_="card-body",
-                            style="min-height: 400px;"
-                        ),
-                        class_="card"
-                    ),
-                    
                     class_="main-panel"
                 )
             )
@@ -685,7 +597,6 @@ def server(input, output, session):
                     df[f"{col1}_x_{col2}"] = df[col1] * df[col2]
                     status_messages.append(f"✓ Created interaction: {col1}_x_{col2}")
 
-            # Update data and UI with feature engineering status
             data.set(df)
             update_ui_with_data(df)
             feature_status.set("\n".join(status_messages))
@@ -702,7 +613,6 @@ def server(input, output, session):
             feature_status.set("⚠️ No previous state available to revert to")
             return
         
-        # Restore previous state
         data.set(prev_df)
         update_ui_with_data(prev_df)
         feature_status.set("✓ Reverted to previous state")
@@ -745,7 +655,6 @@ def server(input, output, session):
             processing_status.set("❌ No data loaded")
             return
 
-        # Store current state before modification
         cleaning_history.set(df.copy())
         
         selected_vars = input.varSelect()
@@ -756,7 +665,6 @@ def server(input, output, session):
         df = df.copy()
         status_messages = []
 
-        # Keep selected variables
         valid_vars = [col for col in selected_vars if col in df.columns]
         if not valid_vars:
             status_messages.append("⚠️ No valid columns selected")
@@ -765,7 +673,6 @@ def server(input, output, session):
             df = df.loc[:, valid_vars].copy()
             status_messages.append(f"✓ Selected {len(valid_vars)} variables")
 
-        # Handle missing values
         missing_option = input.missingDataOption()
         if missing_option == "Convert Common Missing Values to NA":
             missing_values = ["", "-9", "-99", "NA", "N/A", "nan", "NaN", "null", "NULL", "None"]
@@ -943,33 +850,54 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
     @output
     @render.ui
     def main_plot():
-        df = data.get()
-        if df is None or df.empty or not input.x_var() or not input.y_var():
+        df = get_filtered_data()
+        if df is None or df.empty:
             fig = go.Figure()
             fig.update_layout(title="No data to display")
             return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
-            
+        
         try:
-            x_col = input.x_var()
-            y_col = input.y_var()
             plot_type = input.plot_type()
             
-            if plot_type == "line":
-                fig = px.line(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
-            elif plot_type == "bar":
-                fig = px.bar(df, x=x_col, y=y_col, title=f"{y_col} by {x_col}")
-            elif plot_type == "scatter":
-                fig = px.scatter(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
-            elif plot_type == "histogram":
-                fig = px.histogram(df, x=x_col, title=f"Distribution of {x_col}")
-            else:
-                fig = px.line(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+            if plot_type == "heatmap":
+                numeric_data = df.select_dtypes(include=['number'])
+                if numeric_data.shape[1] < 2:
+                    fig = go.Figure()
+                    fig.update_layout(title="Need at least 2 numeric columns for correlation heatmap")
+                    return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
                 
-            fig.update_layout(
-                xaxis_title=x_col,
-                yaxis_title=y_col,
-                template="plotly_white"
-            )
+                corr = numeric_data.corr()
+                fig = px.imshow(corr,
+                              labels=dict(color="Correlation"),
+                              x=corr.columns,
+                              y=corr.columns,
+                              color_continuous_scale="RdBu")
+                fig.update_layout(title="Correlation Heatmap")
+                
+            else:
+                if not input.x_var() or (plot_type != "histogram" and not input.y_var()):
+                    fig = go.Figure()
+                    fig.update_layout(title="Please select variables for plotting")
+                    return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+                    
+                x_col = input.x_var()
+                y_col = input.y_var() if plot_type != "histogram" else None
+                
+                if plot_type == "line":
+                    fig = px.line(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+                elif plot_type == "bar":
+                    fig = px.bar(df, x=x_col, y=y_col, title=f"{y_col} by {x_col}")
+                elif plot_type == "scatter":
+                    fig = px.scatter(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+                elif plot_type == "histogram":
+                    fig = px.histogram(df, x=x_col, title=f"Distribution of {x_col}")
+                
+                fig.update_layout(
+                    xaxis_title=x_col,
+                    yaxis_title=y_col if y_col else "Count",
+                    template="plotly_white"
+                )
+                
             return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
         except Exception as e:
             fig = go.Figure()
@@ -1063,7 +991,7 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
 
     @output
     @render.ui
-    def eda_filter_ui():
+    def viz_filter_ui():
         df = data.get()
         if df is None:
             return ui.TagList()
@@ -1088,358 +1016,124 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
                         continue
                         
                     filter_inputs.append(
-                        ui.input_slider(f"eda_filter_{col}", f"Filter {col}:", 
+                        ui.input_slider(f"viz_filter_{col}", f"Filter {col}:", 
                                       min=min_val, max=max_val, 
                                       value=[min_val, max_val])
                     )
                 elif pd.api.types.is_categorical_dtype(df[col]) or pd.api.types.is_object_dtype(df[col]):
                     unique_vals = df[col].dropna().unique().tolist()
-                    if len(unique_vals) < 15 and len(unique_vals) > 0:  # Only create filter for categorical with reasonable number of values
+                    if len(unique_vals) < 15 and len(unique_vals) > 0:
                         choices = {str(val): str(val) for val in unique_vals}
                         filter_inputs.append(
-                            ui.input_checkbox_group(f"eda_filter_{col}", f"Filter {col}:", 
+                            ui.input_checkbox_group(f"viz_filter_{col}", f"Filter {col}:", 
                                                   choices=choices))
-            except Exception as e:
-                print(f"Error creating filter for column {col}: {str(e)}")
+            except Exception:
                 continue
         
         return filter_inputs
     
     @reactive.Calc
-    def get_eda_filtered_data():
+    def get_filtered_data():
         df = data.get()
         if df is None:
             return None
         
         try:
             for col in df.columns:
-                if hasattr(input, f"eda_filter_{col}"):
+                if hasattr(input, f"viz_filter_{col}"):
                     try:
                         if pd.api.types.is_numeric_dtype(df[col]):
-                            range_val = getattr(input, f"eda_filter_{col}")()
+                            range_val = getattr(input, f"viz_filter_{col}")()
                             if range_val and len(range_val) == 2:
                                 mask = df[col].notna() & (df[col] >= range_val[0]) & (df[col] <= range_val[1])
                                 df = df[mask]
                         elif pd.api.types.is_categorical_dtype(df[col]) or pd.api.types.is_object_dtype(df[col]):
-                            selected = getattr(input, f"eda_filter_{col}")()
+                            selected = getattr(input, f"viz_filter_{col}")()
                             if selected and len(selected) > 0:
                                 df = df[df[col].isin(selected)]
-                    except Exception as e:
-                        print(f"Error applying filter for column {col}: {str(e)}")
+                    except Exception:
                         continue
             
             return df
-        except Exception as e:
-            print(f"Error in get_eda_filtered_data: {str(e)}")
+        except Exception:
             return df
     
     @output
     @render.ui
-    def eda_plot_controls():
-        df = data.get()
-        if df is None:
-            return ui.TagList()
-        
-        plot_type = input.eda_plot_type()
-        controls = ui.TagList()
-        
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-        
-        if len(numeric_cols) == 0 or (plot_type != "heatmap" and len(numeric_cols) == 0):
-            return ui.p("Not enough appropriate columns for the selected plot type.")
-        
-        all_cols = df.columns.tolist()
-        
-        if plot_type == "histogram":
-            controls.append(ui.input_select("eda_hist_col", "Select Column:", 
-                                          {col: col for col in numeric_cols}))
-            controls.append(ui.input_slider("eda_hist_bins", "Number of Bins:", 
-                                          min=5, max=50, value=20))
-            controls.append(ui.input_checkbox("eda_hist_kde", "Show KDE", value=True))
-            if len(cat_cols) > 0:
-                controls.append(ui.input_select("eda_hist_hue", "Color by (optional):", 
-                                              {"": "None", **{col: col for col in cat_cols}}))
-                
-        elif plot_type == "scatter":
-            controls.append(ui.input_select("eda_scatter_x", "X-axis:", 
-                                          {col: col for col in numeric_cols}))
-            controls.append(ui.input_select("eda_scatter_y", "Y-axis:", 
-                                          {col: col for col in numeric_cols}))
-            if len(cat_cols) > 0:
-                controls.append(ui.input_select("eda_scatter_hue", "Color by (optional):", 
-                                              {"": "None", **{col: col for col in cat_cols}}))
-            controls.append(ui.input_checkbox("eda_scatter_regression", "Show Regression Line", value=False))
-            
-        elif plot_type == "bar":
-            controls.append(ui.input_select("eda_bar_x", "X-axis:", 
-                                          {col: col for col in all_cols}))
-            controls.append(ui.input_select("eda_bar_y", "Y-axis (optional):", 
-                                          {"": "Count", **{col: col for col in numeric_cols}}))
-            if len(cat_cols) > 0:
-                controls.append(ui.input_select("eda_bar_hue", "Color by (optional):", 
-                                              {"": "None", **{col: col for col in cat_cols}}))
-        
-        return controls
-    
-    @output
-    @render.table
-    def eda_data_preview():
-        df = get_eda_filtered_data()
-        if df is None:
-            return pd.DataFrame({'Message': ['No data available']})
-        
-        return df.head(10)
-    
-    @output
-    @render.table
-    def eda_numerical_summary():
-        df = get_eda_filtered_data()
-        if df is None:
-            return pd.DataFrame({'Message': ['No data available']})
-        
-        numeric_data = df.select_dtypes(include=['number'])
-        if numeric_data.shape[1] == 0:
-            return pd.DataFrame({'Message': ['No numeric columns in dataset']})
-        
-        summary = numeric_data.describe().transpose()
-        
-        summary['skew'] = numeric_data.skew()
-        summary['kurtosis'] = numeric_data.kurtosis()
-        
-        summary = summary.round(4)
-        
-        summary = summary.reset_index()
-        summary.rename(columns={'index': 'Column'}, inplace=True)
-        
-        return summary
-    
-    @output
-    @render.plot
-    def eda_plot():
-        df = get_eda_filtered_data()
-        if df is None:
-            return plt.figure()
-
-        plot_type = input.eda_plot_type()
-        fig = plt.figure(figsize=(10, 6))
+    def main_plot():
+        df = get_filtered_data()
+        if df is None or df.empty:
+            fig = go.Figure()
+            fig.update_layout(title="No data to display")
+            return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
         
         try:
-            if plot_type == "histogram":
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if not num_cols:
-                    plt.text(0.5, 0.5, "No numeric columns available for histogram", 
-                           ha='center', va='center', fontsize=12)
-                    plt.axis('off')
-                    return fig
-                
-                col = input.eda_hist_col() if hasattr(input, "eda_hist_col") else num_cols[0]
-                bins = input.eda_hist_bins() if hasattr(input, "eda_hist_bins") else 20
-                kde = input.eda_hist_kde() if hasattr(input, "eda_hist_kde") else True
-                
-                hue = None
-                if hasattr(input, "eda_hist_hue") and input.eda_hist_hue():
-                    hue = input.eda_hist_hue()
-                
-                sns.histplot(data=df, x=col, bins=bins, kde=kde, hue=hue)
-                plt.title(f'Histogram of {col}')
-                plt.tight_layout()
-                
-            elif plot_type == "scatter":
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if len(num_cols) < 2:
-                    plt.text(0.5, 0.5, "Need at least 2 numeric columns for scatter plot", 
-                           ha='center', va='center', fontsize=12)
-                    plt.axis('off')
-                    return fig
-                
-                x_col = input.eda_scatter_x() if hasattr(input, "eda_scatter_x") else num_cols[0]
-                y_col = input.eda_scatter_y() if hasattr(input, "eda_scatter_y") else num_cols[1]
-                
-                regression = input.eda_scatter_regression() if hasattr(input, "eda_scatter_regression") else False
-                
-                hue = None
-                if hasattr(input, "eda_scatter_hue") and input.eda_scatter_hue():
-                    hue = input.eda_scatter_hue()
-                
-                scatter = sns.scatterplot(data=df, x=x_col, y=y_col, hue=hue)
-                
-                if regression:
-                    sns.regplot(data=df, x=x_col, y=y_col, scatter=False, ax=scatter.axes)
-                
-                plt.title(f'Scatter Plot of {y_col} vs {x_col}')
-                plt.tight_layout()
-                
-            elif plot_type == "bar":
-                x_col = input.eda_bar_x() if hasattr(input, "eda_bar_x") else df.columns[0]
-                y_col = input.eda_bar_y() if hasattr(input, "eda_bar_y") and input.eda_bar_y() else None
-                
-                hue = None
-                if hasattr(input, "eda_bar_hue") and input.eda_bar_hue():
-                    hue = input.eda_bar_hue()
-                
-                if y_col:
-                    sns.barplot(data=df, x=x_col, y=y_col, hue=hue)
-                    plt.title(f'Bar Plot of {y_col} by {x_col}')
-                else:
-                    sns.countplot(data=df, x=x_col, hue=hue)
-                    plt.title(f'Count of Records by {x_col}')
-                
-                plt.xticks(rotation=45, ha='right')
-                plt.tight_layout()
-                
-            elif plot_type == "heatmap":
-                corr_data = df.select_dtypes(include=['number']).corr()
-                if corr_data.shape[0] < 2:
-                    plt.text(0.5, 0.5, "Need at least 2 numeric columns for correlation heatmap", 
-                           ha='center', va='center', fontsize=12)
-                    plt.axis('off')
-                    return fig
-                
-                sns.heatmap(corr_data, annot=True, cmap='coolwarm', fmt=".2f")
-                plt.title('Correlation Matrix')
-                plt.tight_layout()
-        
-        except Exception as e:
-            plt.clf()
-            plt.text(0.5, 0.5, f"Error generating plot: {str(e)}", 
-                    ha='center', va='center', fontsize=12)
-            plt.axis('off')
+            plot_type = input.plot_type()
             
-        return fig
-    
+            if plot_type == "heatmap":
+                numeric_data = df.select_dtypes(include=['number'])
+                if numeric_data.shape[1] < 2:
+                    fig = go.Figure()
+                    fig.update_layout(title="Need at least 2 numeric columns for correlation heatmap")
+                    return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+                
+                corr = numeric_data.corr()
+                fig = px.imshow(corr,
+                              labels=dict(color="Correlation"),
+                              x=corr.columns,
+                              y=corr.columns,
+                              color_continuous_scale="RdBu")
+                fig.update_layout(title="Correlation Heatmap")
+                
+            else:
+                if not input.x_var() or (plot_type != "histogram" and not input.y_var()):
+                    fig = go.Figure()
+                    fig.update_layout(title="Please select variables for plotting")
+                    return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+                    
+                x_col = input.x_var()
+                y_col = input.y_var() if plot_type != "histogram" else None
+                
+                if plot_type == "line":
+                    fig = px.line(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+                elif plot_type == "bar":
+                    fig = px.bar(df, x=x_col, y=y_col, title=f"{y_col} by {x_col}")
+                elif plot_type == "scatter":
+                    fig = px.scatter(df, x=x_col, y=y_col, title=f"{y_col} vs {x_col}")
+                elif plot_type == "histogram":
+                    fig = px.histogram(df, x=x_col, title=f"Distribution of {x_col}")
+                
+                fig.update_layout(
+                    xaxis_title=x_col,
+                    yaxis_title=y_col if y_col else "Count",
+                    template="plotly_white"
+                )
+                
+            return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+        except Exception as e:
+            fig = go.Figure()
+            fig.update_layout(title=f"Error creating plot: {str(e)}")
+            return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+
+    @output
+    @render.table
+    def summary_stats():
+        df = get_filtered_data()
+        if df is None:
+            return pd.DataFrame({'Message': ['No data available']})
+        
+        stats = df.describe().transpose()
+        return stats.reset_index().rename(columns={'index': 'Statistic'})
+
     @output
     @render.ui
-    def eda_plot_description():
-        df = get_eda_filtered_data()
+    def distribution_plot():
+        df = get_filtered_data()
         if df is None:
-            return ui.TagList()
+            return ui.HTML("<p>No data available for distribution plot</p>")
         
-        plot_type = input.eda_plot_type()
-        plot_info = ui.TagList()
-        
-        try:
-            if plot_type == "histogram":
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if not num_cols:
-                    return ui.p("No numeric columns available for analysis")
-                
-                col = input.eda_hist_col() if hasattr(input, "eda_hist_col") else num_cols[0]
-                
-                description = [
-                    ui.h4(f"Histogram Analysis: {col}"),
-                    ui.p(f"Mean: {df[col].mean():.4f}"),
-                    ui.p(f"Median: {df[col].median():.4f}"),
-                    ui.p(f"Standard Deviation: {df[col].std():.4f}"),
-                    ui.p(f"Skewness: {df[col].skew():.4f}"),
-                    ui.p(f"Kurtosis: {df[col].kurtosis():.4f}")
-                ]
-                plot_info.extend(description)
-                
-            elif plot_type == "scatter":
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if len(num_cols) < 2:
-                    return ui.p("Need at least 2 numeric columns for analysis")
-                
-                x_col = input.eda_scatter_x() if hasattr(input, "eda_scatter_x") else num_cols[0]
-                y_col = input.eda_scatter_y() if hasattr(input, "eda_scatter_y") else num_cols[1]
-                
-                correlation = df[[x_col, y_col]].corr().iloc[0, 1]
-                
-                if hasattr(input, "eda_scatter_regression") and input.eda_scatter_regression():
-                    X = sm.add_constant(df[x_col])
-                    model = sm.OLS(df[y_col], X).fit()
-                    description = [
-                        ui.h4(f"Scatter Plot Analysis: {y_col} vs {x_col}"),
-                        ui.p(f"Correlation: {correlation:.4f}"),
-                        ui.h5("Regression Summary:"),
-                        ui.p(f"Intercept: {model.params[0]:.4f}"),
-                        ui.p(f"Slope: {model.params[1]:.4f}"),
-                        ui.p(f"R-squared: {model.rsquared:.4f}"),
-                        ui.p(f"P-value: {model.f_pvalue:.4f}")
-                    ]
-                else:
-                    description = [
-                        ui.h4(f"Scatter Plot Analysis: {y_col} vs {x_col}"),
-                        ui.p(f"Correlation: {correlation:.4f}")
-                    ]
-                plot_info.extend(description)
-                
-            elif plot_type == "bar":
-                x_col = input.eda_bar_x() if hasattr(input, "eda_bar_x") else df.columns[0]
-                y_col = input.eda_bar_y() if hasattr(input, "eda_bar_y") and input.eda_bar_y() else None
-                
-                if y_col:
-                    grouped = df.groupby(x_col)[y_col].agg(['mean', 'count']).reset_index()
-                    if not grouped.empty:
-                        description = [
-                            ui.h4(f"Bar Plot Analysis: {y_col} by {x_col}"),
-                            ui.p(f"Number of groups: {grouped.shape[0]}"),
-                            ui.p(f"Highest average: {grouped.loc[grouped['mean'].idxmax(), x_col]} ({grouped['mean'].max():.4f})"),
-                            ui.p(f"Lowest average: {grouped.loc[grouped['mean'].idxmin(), x_col]} ({grouped['mean'].min():.4f})")
-                        ]
-                    else:
-                        description = [ui.p("No data available for analysis after grouping")]
-                else:
-                    value_counts = df[x_col].value_counts()
-                    if not value_counts.empty:
-                        description = [
-                            ui.h4(f"Count Plot Analysis: {x_col}"),
-                            ui.p(f"Number of unique values: {value_counts.shape[0]}"),
-                            ui.p(f"Most common: {value_counts.index[0]} ({value_counts.iloc[0]} occurrences)"),
-                            ui.p(f"Least common: {value_counts.index[-1]} ({value_counts.iloc[-1]} occurrences)")
-                        ]
-                    else:
-                        description = [ui.p("No data available for analysis")]
-                plot_info.extend(description)
-                
-            elif plot_type == "heatmap":
-                corr_data = df.select_dtypes(include=['number']).corr()
-                if corr_data.shape[0] < 2:
-                    return ui.p("Need at least 2 numeric columns for correlation analysis")
-                
-                high_corr = corr_data.unstack().sort_values(ascending=False)
-                high_corr = high_corr[(high_corr < 1.0) & (high_corr > 0.5)]
-                
-                description = [
-                    ui.h4("Correlation Heatmap Analysis:"),
-                    ui.p(f"Number of numeric features: {corr_data.shape[0]}")
-                ]
-                
-                if len(high_corr) > 0:
-                    description.append(ui.h5("Strong Positive Correlations (>0.5):"))
-                    for idx, corr_val in high_corr.items():
-                        if idx[0] != idx[1]:  # Skip self-correlations
-                            description.append(ui.p(f"{idx[0]} & {idx[1]}: {corr_val:.4f}"))
-                plot_info.extend(description)
-        
-        except Exception as e:
-            plot_info.append(ui.p(f"Error generating plot description: {str(e)}"))
-            
-        return plot_info
-    
-    @output
-    @render.plot
-    def eda_correlation_plot():
-        df = get_eda_filtered_data()
-        if df is None:
-            return plt.figure()
-        
-        numeric_data = df.select_dtypes(include=['number'])
-        if numeric_data.shape[1] < 2:
-            fig = plt.figure()
-            plt.text(0.5, 0.5, "Need at least 2 numeric columns for correlation analysis", 
-                   ha='center', va='center', fontsize=12)
-            plt.axis('off')
-            return fig
-        
-        fig = plt.figure(figsize=(10, 8))
-        corr = numeric_data.corr()
-        mask = np.triu(np.ones_like(corr, dtype=bool))
-        sns.heatmap(corr, mask=mask, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
-        plt.title('Correlation Matrix (Upper Triangle Hidden)')
-        plt.tight_layout()
-        return fig
+        fig = px.histogram(df, x=input.summary_var(), title=f"Distribution of {input.summary_var()}")
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs='cdn'))
 
     @reactive.effect
     @reactive.event(input.revertCleaningChange)
