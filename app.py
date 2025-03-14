@@ -522,7 +522,6 @@ def server(input, output, session):
         ui.update_select("featureColumn", choices=df.columns.tolist())
         ui.update_selectize("multiColumns", choices=df.columns.tolist())
         
-        # Update visualization tab dropdowns
         ui.update_select("x_var", choices=df.columns.tolist())
         ui.update_select("y_var", choices=df.columns.tolist())
         ui.update_select("summary_var", choices=df.columns.tolist())
@@ -539,7 +538,6 @@ def server(input, output, session):
             return
 
         try:
-            # Store current state before modification
             previous_data.set(df.copy())
             
             df = df.copy()
@@ -760,22 +758,22 @@ def server(input, output, session):
             return "No data loaded"
         
         summary = f"""{'=' * 40}
-DATASET OVERVIEW
-{'=' * 40}
+                    DATASET OVERVIEW
+                    {'=' * 40}
 
-Dataset Shape:           {df.shape[0]} rows × {df.shape[1]} columns
-Memory Usage:           {df.memory_usage().sum() / 1024**2:.2f} MB
-Number of Duplicate Rows: {df.duplicated().sum()}
+                    Dataset Shape:           {df.shape[0]} rows × {df.shape[1]} columns
+                    Memory Usage:           {df.memory_usage().sum() / 1024**2:.2f} MB
+                    Number of Duplicate Rows: {df.duplicated().sum()}
 
-{'=' * 40}
-COLUMN TYPES
-{'=' * 40}
+                    {'=' * 40}
+                    COLUMN TYPES
+                    {'=' * 40}
 
-Numerical Columns:  {len(df.select_dtypes(include=['int64', 'float64']).columns)}
-Categorical Columns: {len(df.select_dtypes(include=['object', 'category']).columns)}
-DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
+                    Numerical Columns:  {len(df.select_dtypes(include=['int64', 'float64']).columns)}
+                    Categorical Columns: {len(df.select_dtypes(include=['object', 'category']).columns)}
+                    DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
 
-"""
+                    """
         columns = df.columns.tolist()
         column_list = '\n'.join(f"{i:3d}. {col}" for i, col in enumerate(columns, 1))
         
@@ -975,7 +973,6 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
     @reactive.effect
     @reactive.event(input.deselectAll)
     def deselect_all_variables():
-        """Deselect all variables in the checkbox group"""
         df = data.get()
         if df is not None:
             ui.update_checkbox_group("varSelect", selected=[])
@@ -983,7 +980,6 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
     @reactive.effect
     @reactive.event(input.selectAll)
     def select_all_variables():
-        """Select all variables in the checkbox group"""
         df = data.get()
         if df is not None:
             ui.update_checkbox_group("varSelect", selected=df.columns.tolist())
@@ -1138,7 +1134,6 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
     @reactive.effect
     @reactive.event(input.revertCleaningChange)
     def revert_cleaning_change():
-        """Revert to the previous state before last cleaning operation"""
         prev_df = cleaning_history.get()
         if prev_df is None:
             processing_status.set("⚠️ No previous state available to revert to\n")
