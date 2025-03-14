@@ -1,6 +1,6 @@
-# STAT5243_project_2
+# STAT 5243 Project 2
 
-### Authors: Jinze Shi, Qiaoyang Lin, Nan Xiao, Yemin Wang, Sally Liu
+Authors: Jinze Shi, Qiaoyang Lin, Nan Xiao, Yemin Wang, Sally Liu
 
 ## Project Description
 
