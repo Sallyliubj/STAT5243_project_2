@@ -63,4 +63,6 @@ Grouping & Color Options: Color-coding data points by categorical variables
 Summary Statistics: Shows descriptive statistics for all numerical columns, including metrics like mean, median, skewness, correlation, and regression analysis.
 Correlation Analysis: Correlation heatmap with detailed analysis
 
-
+Yemin Wang's Work: User Interface(UI) and User Experience and Web Application
+Construct a well-structured, feature-rich analytical tool that covers the complete data analysis workflow from loading and cleaning to visualization and exploration.
+The application has a modern UI with cards, styling, and responsive layouts.
