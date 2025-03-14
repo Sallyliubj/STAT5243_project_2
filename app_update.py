@@ -16,22 +16,10 @@ import json
 import io
 import base64
 import warnings
+import pyreadr  
+import openpyxl  
 warnings.filterwarnings('ignore')
 
-# Optional imports
-try:
-    import pyreadr  
-    HAS_PYREADR = True
-except ImportError:
-    HAS_PYREADR = False
-    print("Note: pyreadr not installed. RDS files will not be supported.")
-
-try:
-    import openpyxl  
-    HAS_OPENPYXL = True
-except ImportError:
-    HAS_OPENPYXL = False
-    print("Note: openpyxl not installed. Excel files will not be supported.")
 
 # Define CSS for the modern UI
 app_css = """
@@ -552,8 +540,6 @@ def server(input, output, session):
                         raise Exception(f"Error reading CSV: {str(e)}")
                 
             elif file_ext in ["xlsx", "xls"]:
-                if not HAS_OPENPYXL and file_ext == "xlsx":
-                    raise Exception("openpyxl not installed. Please install it to read Excel files.")
                 try:
                     df = pd.read_excel(file_path, engine='openpyxl' if file_ext == 'xlsx' else 'xlrd')
                     print(f"✓ Successfully read {file_ext.upper()} file")
@@ -574,8 +560,6 @@ def server(input, output, session):
                     print("✓ Successfully read JSON Lines file")
                 
             elif file_ext == "rds":
-                if not HAS_PYREADR:
-                    raise Exception("pyreadr not installed. Please install it to read RDS files.")
                 result = pyreadr.read_r(file_path)
                 df = result[None] if None in result else result[list(result.keys())[0]]
                 print("✓ Successfully read RDS file")
@@ -728,22 +712,17 @@ def server(input, output, session):
         filename=lambda: f"processed_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     )
     def downloadData():
-        """Download the processed dataset"""
         df = data.get()
         if df is not None:
             try:
-                # Convert DataFrame to bytes
                 csv_bytes = df.to_csv(index=False).encode('utf-8')
-                
-                # Return bytes with proper headers
                 return {"content-type": "text/csv", "content": csv_bytes}
-                
             except Exception as e:
                 print(f"Download error: {str(e)}")
                 return {"content-type": "text/plain", "content": b"Error occurred while downloading data"}
         return {"content-type": "text/plain", "content": b"No data available"}
 
-    # Add separate outputs for feature engineering page
+
     @output
     @render.text
     def featureStatus():
@@ -830,7 +809,6 @@ def server(input, output, session):
             if imputed_count > 0:
                 status_messages.append(f"✓ Imputed {imputed_count} missing values with mode values")
 
-        # Additional Data Processing Steps
         selected_processing_options = input.dataProcessingOptions()
         if "Remove Duplicates" in selected_processing_options:
             original_rows = len(df)
@@ -962,7 +940,6 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
             )
         return preview_df
         
-    # Visualization tab outputs
     @output
     @render.ui
     def main_plot():
@@ -1083,7 +1060,7 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
         if df is not None:
             ui.update_checkbox_group("varSelect", selected=df.columns.tolist())
             
-    # EDA tab functions
+
     @output
     @render.ui
     def eda_filter_ui():
@@ -1096,7 +1073,6 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
         for col in df.columns:
             try:
                 if pd.api.types.is_numeric_dtype(df[col]):
-                    # Handle potential NaN, inf values, and math domain errors
                     col_data = df[col].replace([np.inf, -np.inf], np.nan).dropna()
                     
                     if len(col_data) == 0:
@@ -1105,11 +1081,9 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
                     min_val = float(col_data.min())
                     max_val = float(col_data.max())
                     
-                    # Check if min and max are the same or if they're invalid
                     if not np.isfinite(min_val) or not np.isfinite(max_val) or min_val == max_val:
                         continue
                     
-                    # Check if the range is too large for a slider (prevent UI issues)
                     if max_val - min_val > 1e10:
                         continue
                         
@@ -1138,14 +1112,12 @@ DateTime Columns:    {len(df.select_dtypes(include=['datetime64']).columns)}
             return None
         
         try:
-            # Apply filters if they exist
             for col in df.columns:
                 if hasattr(input, f"eda_filter_{col}"):
                     try:
                         if pd.api.types.is_numeric_dtype(df[col]):
                             range_val = getattr(input, f"eda_filter_{col}")()
                             if range_val and len(range_val) == 2:
-                                # Handle potential NaN values safely
                                 mask = df[col].notna() & (df[col] >= range_val[0]) & (df[col] <= range_val[1])
                                 df = df[mask]
                         elif pd.api.types.is_categorical_dtype(df[col]) or pd.api.types.is_object_dtype(df[col]):
