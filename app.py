@@ -15,10 +15,23 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import json
 import io
 import base64
-import warnings
-import pyreadr
-import openpyxl  
+import warnings 
 warnings.filterwarnings('ignore')
+
+
+try:
+    import pyreadr  
+    HAS_PYREADR = True
+except ImportError:
+    HAS_PYREADR = False
+    print("Note: pyreadr not installed. RDS files will not be supported.")
+
+try:
+    import openpyxl  
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+    print("Note: openpyxl not installed. Modern Excel files will not be supported.")
 
 
 # Define CSS for the modern UI
